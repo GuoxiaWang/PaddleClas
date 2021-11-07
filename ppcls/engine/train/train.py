@@ -17,6 +17,109 @@ import time
 import paddle
 from ppcls.engine.train.utils import update_loss, update_metric, log_info
 
+from collections import defaultdict
+@paddle.no_grad()
+def clip_grad_norm_(grads_fp32,
+                    grads_fp16,
+                    grad_norm_clip=2.0,
+                    grad_norm_clip_max=2.0):
+
+    if len(grads_fp32) <= 0 and len(grads_fp16) <= 0:
+        print('grads_fp32 and grads_fp16 are empty')
+        return None
+
+    if len(grads_fp32) > 0:
+        norm_fp32 = paddle.sum(
+            paddle.stack([
+                paddle.matmul(g.detach().reshape((1, -1)),
+                              g.detach().reshape((-1, 1))) for g in grads_fp32
+            ]))
+    if len(grads_fp16) > 0:
+        norm_fp16 = paddle.sum(
+            paddle.stack([
+                paddle.matmul(g.detach().reshape((1, -1)),
+                              g.detach().reshape((-1, 1))) for g in grads_fp16
+            ]))
+
+    if len(grads_fp32) > 0 and len(grads_fp16) > 0:
+        global_norm = paddle.sqrt(norm_fp32 + paddle.cast(norm_fp16,
+                                                          'float32'))
+    elif len(grads_fp32) > 0:
+        global_norm = paddle.sqrt(norm_fp32)
+    elif len(grads_fp16) > 0:
+        global_norm = paddle.cast(norm_fp16, 'float32')
+
+    clip_coef_fp32 = paddle.clip(
+        grad_norm_clip / (global_norm + 1e-6), max=grad_norm_clip_max)
+
+    if len(grads_fp32) > 0:
+        grads_fp32 = [g.scale_(clip_coef_fp32) for g in grads_fp32]
+
+    if len(grads_fp16) > 0:
+        clip_coef_fp16 = paddle.cast(clip_coef_fp32, 'float16')
+        grads_fp16 = [g.scale_(clip_coef_fp16) for g in grads_fp16]
+
+    return global_norm
+
+@paddle.no_grad()
+def clip_grad_norm(optimizer, grad_norm_clip=1.0, grad_norm_clip_max=1.0):
+
+    # data parallel
+    param_grads_dict = defaultdict(list)
+    # model parallel
+    dist_param_grads_dict = defaultdict(list)
+
+    if getattr(optimizer, '_param_groups', None) and isinstance(
+            optimizer._param_groups[0], dict):
+        for group in optimizer._param_groups:
+            for param in group['params']:
+                if not param.is_distributed:
+                    if param._grad_ivar() is not None:
+                        param_grads_dict[param._grad_ivar().dtype].append(
+                            param._grad_ivar())
+                else:
+                    if param._grad_ivar() is not None:
+                        dist_param_grads_dict[param._grad_ivar(
+                        ).dtype].append(param._grad_ivar())
+                    elif getattr(param, 'sparse_grad', None) is not None:
+                        grad = getattr(param, 'sparse_grad')
+                        dist_param_grads_dict[grad.dtype].append(grad)
+    else:
+        for param in optimizer._parameter_list:
+            if not param.is_distributed:
+                if param._grad_ivar() is not None:
+                    param_grads_dict[param._grad_ivar().dtype].append(
+                        param._grad_ivar())
+            else:
+                if param._grad_ivar() is not None:
+                    dist_param_grads_dict[param._grad_ivar().dtype].append(
+                        param._grad_ivar())
+                elif getattr(param, 'sparse_grad', None) is not None:
+                    grad = getattr(param, 'sparse_grad')
+                    dist_param_grads_dict[grad.dtype].append(grad)
+
+    grads_fp32 = []
+    grads_fp16 = []
+    if len(param_grads_dict[paddle.float32]) > 0:
+        coalesced_grads_and_vars_fp32 = \
+            paddle.fluid.dygraph.parallel.build_groups(param_grads_dict[paddle.float32], 128 * 1024 * 1024)
+        for coalesced_grad, _, _ in coalesced_grads_and_vars_fp32:
+            grads_fp32.append(coalesced_grad)
+
+    if len(param_grads_dict[paddle.float16]) > 0:
+        coalesced_grads_and_vars_fp16 = \
+            paddle.fluid.dygraph.parallel.build_groups(param_grads_dict[paddle.float16], 128 * 1024 * 1024)
+        for coalesced_grad, _, _ in coalesced_grads_and_vars_fp16:
+            grads_fp16.append(coalesced_grad)
+
+    clip_grad_norm_(grads_fp32, grads_fp16, grad_norm_clip, grad_norm_clip_max)
+
+    if len(param_grads_dict[paddle.float16]) > 0:
+        paddle.fluid.dygraph.parallel._split_tensors(
+            coalesced_grads_and_vars_fp16)
+    if len(param_grads_dict[paddle.float32]) > 0:
+        paddle.fluid.dygraph.parallel._split_tensors(
+            coalesced_grads_and_vars_fp32)
 
 def train_epoch(engine, epoch_id, print_batch_step):
     tic = time.time()
@@ -58,9 +161,13 @@ def train_epoch(engine, epoch_id, print_batch_step):
         if engine.amp:
             scaled = engine.scaler.scale(loss_dict["loss"])
             scaled.backward()
-            engine.scaler.minimize(engine.optimizer, scaled)
+            engine.scaler.step(engine.optimizer)
         else:
             loss_dict["loss"].backward()
+            if engine.global_norm_clip:
+                assert engine.global_norm_clip_max is not None
+                clip_grad_norm(engine.optimizer, engine.global_norm_clip,
+                    engine.global_norm_clip_max)
             engine.optimizer.step()
         engine.optimizer.clear_grad()
         engine.lr_sch.step()

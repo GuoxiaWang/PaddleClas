@@ -7,39 +7,46 @@ Global:
   save_interval: 1
   eval_during_train: True
   eval_interval: 1
-  epochs: 120
+  epochs: 300
   print_batch_step: 10
   use_visualdl: False
   # used for static mode and model export
   image_shape: [3, 224, 224]
   save_inference_dir: ./inference
+  # global_norm_clip
+  global_norm_clip: 1.0
+  global_norm_clip_max: 1.0
 
 # model architecture
 Arch:
   name: ViT_base_patch16_224
   class_num: 1000
+  drop_rate: 0.1
  
 # loss function config for traing/eval process
 Loss:
   Train:
     - CELoss:
         weight: 1.0
+        epsilon: 0.0001
   Eval:
     - CELoss:
         weight: 1.0
-
-
+    
 Optimizer:
-  name: Momentum
-  momentum: 0.9
+  name: AdamW
+  beta1: 0.9
+  beta2: 0.999
+  epsilon: 1e-8
+  weight_decay: 0.3
+  no_weight_decay_name: norm cls_token pos_embed dist_token
+  one_dim_param_no_weight_decay: True
   lr:
-    name: Piecewise
-    learning_rate: 0.1
-    decay_epochs: [30, 60, 90]
-    values: [0.1, 0.01, 0.001, 0.0001]
-  regularizer:
-    name: 'L2'
-    coeff: 0.0001
+    name: Cosine
+    learning_rate: 1e-3
+    eta_min: 1e-5
+    warmup_epoch: 4
+    warmup_start_lr: 1e-6
 
 
 # data loader for train and eval
@@ -55,18 +62,20 @@ DataLoader:
             channel_first: False
         - RandCropImage:
             size: 224
+            interpolation: bicubic
+            backend: pil
         - RandFlipImage:
             flip_code: 1
         - NormalizeImage:
             scale: 1.0/255.0
-            mean: [0.5, 0.5, 0.5]
-            std: [0.5, 0.5, 0.5]
+            mean: [0.485, 0.456, 0.406]
+            std: [0.229, 0.224, 0.225]
             order: ''
 
     sampler:
       name: DistributedBatchSampler
-      batch_size: 64
-      drop_last: False
+      batch_size: 256
+      drop_last: True
       shuffle: True
     loader:
       num_workers: 4
@@ -83,16 +92,18 @@ DataLoader:
             channel_first: False
         - ResizeImage:
             resize_short: 256
+            interpolation: bicubic
+            backend: pil
         - CropImage:
             size: 224
         - NormalizeImage:
             scale: 1.0/255.0
-            mean: [0.5, 0.5, 0.5]
-            std: [0.5, 0.5, 0.5]
+            mean: [0.485, 0.456, 0.406]
+            std: [0.229, 0.224, 0.225]
             order: ''
     sampler:
       name: DistributedBatchSampler
-      batch_size: 64
+      batch_size: 256
       drop_last: False
       shuffle: False
     loader:
@@ -108,12 +119,14 @@ Infer:
         channel_first: False
     - ResizeImage:
         resize_short: 256
+        interpolation: bicubic
+        backend: pil
     - CropImage:
         size: 224
     - NormalizeImage:
         scale: 1.0/255.0
-        mean: [0.5, 0.5, 0.5]
-        std: [0.5, 0.5, 0.5]
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
         order: ''
     - ToCHWImage:
   PostProcess:
@@ -122,9 +135,6 @@ Infer:
     class_id_map_file: ppcls/utils/imagenet1k_label_list.txt
 
 Metric:
-  Train:
-    - TopkAcc:
-        topk: [1, 5]
   Eval:
     - TopkAcc:
         topk: [1, 5]

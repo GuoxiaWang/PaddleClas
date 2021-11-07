@@ -213,6 +213,9 @@ class Engine(object):
             dist.init_parallel_env()
         if self.config["Global"]["distributed"]:
             self.model = paddle.DataParallel(self.model)
+        
+        self.global_norm_clip = self.config["Global"].get("global_norm_clip", None)
+        self.global_norm_clip_max = self.config["Global"].get("global_norm_clip_max", None)
 
         # build postprocess for infer
         if self.mode == 'infer':
