@@ -32,6 +32,7 @@ from ppcls.data.dataloader.mix_dataset import MixDataset
 from ppcls.data.dataloader.DistributedRandomIdentitySampler import DistributedRandomIdentitySampler
 from ppcls.data.dataloader.pk_sampler import PKSampler
 from ppcls.data.dataloader.mix_sampler import MixSampler
+from ppcls.data.dataloader.repeatedaug_sampler import RepeatedAugSampler
 from ppcls.data import preprocess
 from ppcls.data.preprocess import transform
 

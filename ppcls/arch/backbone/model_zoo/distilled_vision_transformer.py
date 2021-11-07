@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import paddle
 import paddle.nn as nn
 from .vision_transformer import VisionTransformer, Identity, trunc_normal_, zeros_
@@ -117,7 +118,41 @@ def _load_pretrained(pretrained, model, model_url, use_ssld=False):
         raise RuntimeError(
             "pretrained type is not available. Please use `string` or `boolean` type."
         )
-
+        
+def _load_for_finetune(path, model):
+    if not (os.path.isdir(path) or os.path.exists(path + '.pdparams')):
+        raise ValueError("Model pretrain path {} does not "
+                         "exists.".format(path))
+        
+    state_dict = model.state_dict()
+    param_state_dict = paddle.load(path + ".pdparams")
+    for k in ['head.weight', 'head.bias']:
+        if k in param_state_dict and param_state_dict[k].shape != state_dict[k].shape:
+            print(f"Removing key {k} from pretrained checkpoint")
+            del param_state_dict[k] 
+            
+    # interpolate position embedding
+    pos_embed_checkpoint = param_state_dict['pos_embed']
+    embedding_size = pos_embed_checkpoint.shape[-1]
+    num_patches = model.patch_embed.num_patches
+    num_extra_tokens = model.pos_embed.shape[-2] - num_patches
+    # height (== width) for the checkpoint position embedding
+    orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
+    # height (== width) for the new position embedding
+    new_size = int(num_patches ** 0.5)
+    # class_token and dist_token are kept unchanged
+    extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
+    # only the position tokens are interpolated
+    pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
+    pos_tokens = paddle.transpose(pos_tokens.reshape([-1, orig_size, orig_size, embedding_size]), perm=[0, 3, 1, 2])
+    pos_tokens = paddle.nn.functional.interpolate(
+        pos_tokens, size=(new_size, new_size), mode='bicubic', align_corners=False)           
+    pos_tokens = paddle.transpose(pos_tokens, perm=[0, 2, 3, 1]).flatten(1, 2)
+    new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
+    param_state_dict['pos_embed'] = new_pos_embed    
+    
+    model.set_dict(param_state_dict)    
+    return
 
 def DeiT_tiny_patch16_224(pretrained=False, use_ssld=False, **kwargs):
     model = VisionTransformer(
@@ -129,13 +164,18 @@ def DeiT_tiny_patch16_224(pretrained=False, use_ssld=False, **kwargs):
         qkv_bias=True,
         epsilon=1e-6,
         **kwargs)
-    _load_pretrained(
-        pretrained,
-        model,
-        MODEL_URLS["DeiT_tiny_patch16_224"],
-        use_ssld=use_ssld)
+    if kwargs.get('finetune', False):
+        assert isinstance(pretrained, str), "pretrained type is not available. Please use `string`."
+        _load_for_finetune(
+            pretrained,
+            model)
+    else:
+        _load_pretrained(
+            pretrained,
+            model,
+            MODEL_URLS["DeiT_tiny_patch16_224"],
+            use_ssld=use_ssld)
     return model
-
 
 def DeiT_small_patch16_224(pretrained=False, use_ssld=False, **kwargs):
     model = VisionTransformer(
@@ -147,11 +187,17 @@ def DeiT_small_patch16_224(pretrained=False, use_ssld=False, **kwargs):
         qkv_bias=True,
         epsilon=1e-6,
         **kwargs)
-    _load_pretrained(
-        pretrained,
-        model,
-        MODEL_URLS["DeiT_small_patch16_224"],
-        use_ssld=use_ssld)
+    if kwargs.get('finetune', False):
+        assert isinstance(pretrained, str), "pretrained type is not available. Please use `string`."
+        _load_for_finetune(
+            pretrained,
+            model)
+    else:
+        _load_pretrained(
+            pretrained,
+            model,
+            MODEL_URLS["DeiT_small_patch16_224"],
+            use_ssld=use_ssld)
     return model
 
 
@@ -165,11 +211,17 @@ def DeiT_base_patch16_224(pretrained=False, use_ssld=False, **kwargs):
         qkv_bias=True,
         epsilon=1e-6,
         **kwargs)
-    _load_pretrained(
-        pretrained,
-        model,
-        MODEL_URLS["DeiT_base_patch16_224"],
-        use_ssld=use_ssld)
+    if kwargs.get('finetune', False):
+        assert isinstance(pretrained, str), "pretrained type is not available. Please use `string`."
+        _load_for_finetune(
+            pretrained,
+            model)
+    else:
+        _load_pretrained(
+            pretrained,
+            model,
+            MODEL_URLS["DeiT_base_patch16_224"],
+            use_ssld=use_ssld)
     return model
 
 

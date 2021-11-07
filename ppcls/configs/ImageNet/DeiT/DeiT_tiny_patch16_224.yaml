@@ -39,7 +39,7 @@ Optimizer:
   one_dim_param_no_weight_decay: True
   lr:
     name: Cosine
-    learning_rate: 1e-3
+    learning_rate: 2e-3
     eta_min: 1e-5
     warmup_epoch: 5
     warmup_start_lr: 1e-6
@@ -121,7 +121,7 @@ DataLoader:
       drop_last: False
       shuffle: False
     loader:
-      num_workers: 4
+      num_workers: 8
       use_shared_memory: True
 
 Infer:

@@ -7,18 +7,20 @@ Global:
   save_interval: 1
   eval_during_train: True
   eval_interval: 1
-  epochs: 300
+  epochs: 30
   print_batch_step: 10
   use_visualdl: False
   # used for static mode and model export
-  image_shape: [3, 224, 224]
+  image_shape: [3, 384, 384]
   save_inference_dir: ./inference
 
 # model architecture
 Arch:
-  name: DeiT_base_patch16_224
+  name: DeiT_tiny_patch16_224
   class_num: 1000
-  drop_path_rate: 0.1
+  img_size: 384
+  finetune: True
+  pretrained: ./pretrained/DeiT_tiny_patch16_224/best_model
  
 # loss function config for traing/eval process
 Loss:
@@ -40,8 +42,8 @@ Optimizer:
   one_dim_param_no_weight_decay: True
   lr:
     name: Cosine
-    learning_rate: 1e-3
-    eta_min: 1e-5
+    learning_rate: 2e-5
+    eta_min: 5e-6
     warmup_epoch: 5
     warmup_start_lr: 1e-6
 
@@ -57,7 +59,7 @@ DataLoader:
             to_rgb: True
             channel_first: False
         - RandCropImage:
-            size: 224
+            size: 384
             interpolation: bicubic
             backend: pil
         - RandFlipImage:
@@ -65,7 +67,7 @@ DataLoader:
         - TimmAutoAugment:
             config_str: rand-m9-mstd0.5-inc1
             interpolation: bicubic
-            img_size: 224
+            img_size: 384
         - NormalizeImage:
             scale: 1.0/255.0
             mean: [0.485, 0.456, 0.406]
@@ -88,9 +90,9 @@ DataLoader:
               alpha: 1.0
               prob: 0.5
     sampler:
-      name: RepeatedAugSampler
-      batch_size: 64
-      drop_last: True
+      name: DistributedBatchSampler
+      batch_size: 256
+      drop_last: False
       shuffle: True
     loader:
       num_workers: 4
@@ -106,11 +108,11 @@ DataLoader:
             to_rgb: True
             channel_first: False
         - ResizeImage:
-            resize_short: 256
+            resize_short: 438
             interpolation: bicubic
             backend: pil
         - CropImage:
-            size: 224
+            size: 384
         - NormalizeImage:
             scale: 1.0/255.0
             mean: [0.485, 0.456, 0.406]
@@ -122,7 +124,7 @@ DataLoader:
       drop_last: False
       shuffle: False
     loader:
-      num_workers: 4
+      num_workers: 8
       use_shared_memory: True
 
 Infer:
@@ -133,11 +135,11 @@ Infer:
         to_rgb: True
         channel_first: False
     - ResizeImage:
-        resize_short: 256
+        resize_short: 438
         interpolation: bicubic
         backend: pil
     - CropImage:
-        size: 224
+        size: 384
     - NormalizeImage:
         scale: 1.0/255.0
         mean: [0.485, 0.456, 0.406]
