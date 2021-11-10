@@ -47,6 +47,7 @@ __all__ = list(MODEL_URLS.keys())
 trunc_normal_ = TruncatedNormal(std=.02)
 normal_ = Normal
 zeros_ = Constant(value=0.)
+minus_tens_ = Constant(value=-10.)
 ones_ = Constant(value=1.)
 
 
@@ -243,9 +244,11 @@ class VisionTransformer(nn.Layer):
                  drop_path_rate=0.,
                  norm_layer='nn.LayerNorm',
                  epsilon=1e-5,
+                 representation_size=None,
                  **kwargs):
         super().__init__()
         self.class_num = class_num
+        self.representation_size = representation_size
 
         self.num_features = self.embed_dim = embed_dim
 
@@ -283,8 +286,18 @@ class VisionTransformer(nn.Layer):
         self.norm = eval(norm_layer)(embed_dim, epsilon=epsilon)
 
         # Classifier head
-        self.head = nn.Linear(embed_dim,
-                              class_num) if class_num > 0 else Identity()
+        if self.representation_size is not None:
+            self.head0 = nn.Linear(embed_dim, representation_size)
+            self.tanh = nn.Tanh()
+            self.head = nn.Linear(representation_size,
+                                  class_num,
+                                  weight_attr=paddle.ParamAttr(name='head.w_0'),
+                                  bias_attr=paddle.ParamAttr(name='head.b_0')) if class_num > 0 else Identity()
+        else:
+            self.head = nn.Linear(embed_dim,
+                                  class_num,
+                                  weight_attr=paddle.ParamAttr(name='head.w_0'),
+                                  bias_attr=paddle.ParamAttr(name='head.b_0')) if class_num > 0 else Identity()
 
         trunc_normal_(self.pos_embed)
         trunc_normal_(self.cls_token)
@@ -294,7 +307,10 @@ class VisionTransformer(nn.Layer):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight)
             if isinstance(m, nn.Linear) and m.bias is not None:
-                zeros_(m.bias)
+                if m.bias.name == 'head.b_0':
+                    minus_tens_(m.bias)
+                else:
+                    zeros_(m.bias)
         elif isinstance(m, nn.LayerNorm):
             zeros_(m.bias)
             ones_(m.weight)
@@ -314,6 +330,8 @@ class VisionTransformer(nn.Layer):
 
     def forward(self, x):
         x = self.forward_features(x)
+        if self.representation_size is not None:
+            x = self.tanh(self.head0(x))
         x = self.head(x)
         return x
 

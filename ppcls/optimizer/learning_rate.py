@@ -104,10 +104,10 @@ class Cosine(object):
             logger.warning(msg)
             warmup_epoch = epochs
         self.learning_rate = learning_rate
-        self.T_max = (epochs - warmup_epoch) * step_each_epoch
+        self.T_max = int(round((epochs - warmup_epoch) * step_each_epoch))
         self.eta_min = eta_min
         self.last_epoch = last_epoch
-        self.warmup_steps = round(warmup_epoch * step_each_epoch)
+        self.warmup_steps = int(round(warmup_epoch * step_each_epoch))
         self.warmup_start_lr = warmup_start_lr
 
     def __call__(self):
