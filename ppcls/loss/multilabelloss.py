@@ -19,18 +19,18 @@ class MultiLabelLoss(nn.Layer):
             one_hot_target = F.one_hot(target, class_num)
         else:
             one_hot_target = target
-        soft_target = F.label_smooth(one_hot_target, epsilon=self.epsilon)
+        if self.epsilon is not None:
+            # soft_target = F.label_smooth(one_hot_target, epsilon=self.epsilon)
+            soft_target = one_hot_target * (1 - self.epsilon) + self.epsilon
+        else:
+            soft_target = one_hot_target
         soft_target = paddle.reshape(soft_target, shape=[-1, class_num])
         return soft_target
 
     def _binary_crossentropy(self, input, target, class_num):
-        if self.epsilon is not None:
-            target = self._labelsmoothing(target, class_num)
-            cost = F.binary_cross_entropy_with_logits(
-                logit=input, label=target)
-        else:
-            cost = F.binary_cross_entropy_with_logits(
-                logit=input, label=target)
+        target = self._labelsmoothing(target, class_num)
+        cost = F.binary_cross_entropy_with_logits(
+            logit=input, label=target)
 
         return cost
 
