@@ -46,6 +46,7 @@ Optimizer:
     eta_min: 5e-6
     warmup_epoch: 5
     warmup_start_lr: 1e-6
+    unit: epoch
 
 # data loader for train and eval
 DataLoader:

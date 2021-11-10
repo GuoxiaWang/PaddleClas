@@ -97,6 +97,7 @@ class Cosine(object):
                  warmup_epoch=0,
                  warmup_start_lr=0.0,
                  last_epoch=-1,
+                 unit='step',
                  **kwargs):
         super().__init__()
         if warmup_epoch >= epochs:
@@ -104,10 +105,15 @@ class Cosine(object):
             logger.warning(msg)
             warmup_epoch = epochs
         self.learning_rate = learning_rate
-        self.T_max = int(round((epochs - warmup_epoch) * step_each_epoch))
+        if unit == 'step':
+            self.T_max = int(round((epochs - warmup_epoch) * step_each_epoch))
+            self.warmup_steps = int(round(warmup_epoch * step_each_epoch))
+        else:
+            self.T_max = epochs - warmup_epoch
+            self.warmup_steps = warmup_epoch
+        
         self.eta_min = eta_min
         self.last_epoch = last_epoch
-        self.warmup_steps = int(round(warmup_epoch * step_each_epoch))
         self.warmup_start_lr = warmup_start_lr
 
     def __call__(self):

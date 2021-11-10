@@ -170,7 +170,9 @@ def train_epoch(engine, epoch_id, print_batch_step):
                     engine.global_norm_clip_max)
             engine.optimizer.step()
         engine.optimizer.clear_grad()
-        engine.lr_sch.step()
+        
+        if engine.lr_sch_unit == 'step':
+            engine.lr_sch.step()
 
         # below code just for logging
         # update metric_for_logger
@@ -181,6 +183,9 @@ def train_epoch(engine, epoch_id, print_batch_step):
         if iter_id % print_batch_step == 0:
             log_info(engine, batch_size, epoch_id, iter_id)
         tic = time.time()
+
+    if engine.lr_sch_unit == 'epoch':
+        engine.lr_sch.step()
 
 
 def forward(engine, batch):

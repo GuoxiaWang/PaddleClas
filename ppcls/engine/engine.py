@@ -202,9 +202,11 @@ class Engine(object):
 
         # build optimizer
         if self.mode == 'train':
+            self.lr_sch_unit = self.config["Optimizer"]["lr"]["unit"]
             self.optimizer, self.lr_sch = build_optimizer(
                 self.config["Optimizer"], self.config["Global"]["epochs"],
                 len(self.train_dataloader), [self.model])
+            
         logger.info('step_each_epoch: ' + str(len(self.train_dataloader)))
 
         # for distributed
