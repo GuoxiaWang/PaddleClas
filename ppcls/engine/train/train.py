@@ -185,8 +185,7 @@ def train_epoch(engine, epoch_id, print_batch_step):
         tic = time.time()
 
     if engine.lr_sch_unit == 'epoch':
-        engine.lr_sch.step()
-
+        engine.lr_sch.step(epoch_id-1)
 
 def forward(engine, batch):
     if not engine.is_rec:

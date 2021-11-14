@@ -121,8 +121,7 @@ class Cosine(object):
             learning_rate=self.learning_rate,
             T_max=self.T_max,
             eta_min=self.eta_min,
-            last_epoch=self.
-            last_epoch) if self.T_max > 0 else self.learning_rate
+            last_epoch=self.last_epoch) if self.T_max > 0 else self.learning_rate
         if self.warmup_steps > 0:
             learning_rate = lr.LinearWarmup(
                 learning_rate=learning_rate,
