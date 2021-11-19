@@ -20,6 +20,8 @@ import random
 
 import numpy as np
 
+import paddle
+import paddle.nn.functional as F
 from ppcls.utils import logger
 from ppcls.data.preprocess.ops.fmix import sample_mask
 
@@ -27,8 +29,12 @@ from ppcls.data.preprocess.ops.fmix import sample_mask
 class BatchOperator(object):
     """ BatchOperator """
 
-    def __init__(self, *args, **kwargs):
-        pass
+    def __init__(self, epsilon=None, *args, **kwargs):
+        if epsilon is not None and (epsilon < 0.0 or epsilon > 1.0):
+            raise Exception(
+                f"Parameter \"epsilon\" of {self.__class__.__name__} should be in [0.0, 1.0] . \"epsilon\": {epsilon}."
+            )
+        self.epsilon = epsilon
 
     def _unpack(self, batch):
         """ _unpack """
@@ -49,7 +55,11 @@ class BatchOperator(object):
 
     def _mix_target(self, targets0, targets1, lam):
         one_hots0 = self._one_hot(targets0)
+        if self.epsilon is not None:
+            one_hots0 = np.array(F.label_smooth(paddle.to_tensor(one_hots0), epsilon=self.epsilon))
         one_hots1 = self._one_hot(targets1)
+        if self.epsilon is not None:
+            one_hots1 = np.array(F.label_smooth(paddle.to_tensor(one_hots1), epsilon=self.epsilon))
         return one_hots0 * lam + one_hots1 * (1 - lam)
 
     def __call__(self, batch):
@@ -57,17 +67,21 @@ class BatchOperator(object):
 
 
 class MixupOperator(BatchOperator):
-    """ Mixup operator """
+    """ Mixup operator 
+    reference: https://arxiv.org/abs/1710.09412
 
-    def __init__(self, class_num, alpha: float=1.):
+    """
+
+    def __init__(self, class_num, alpha: float=1., epsilon=None):
         """Build Mixup operator
 
-        Args:
+        Args
             alpha (float, optional): The parameter alpha of mixup. Defaults to 1..
 
         Raises:
             Exception: The value of parameter is illegal.
         """
+        super(MixupOperator, self).__init__(epsilon=epsilon)
         if alpha <= 0:
             raise Exception(
                 f"Parameter \"alpha\" of Mixup should be greater than 0. \"alpha\": {alpha}."
@@ -82,7 +96,8 @@ class MixupOperator(BatchOperator):
 
     def __call__(self, batch):
         imgs, labels, bs = self._unpack(batch)
-        idx = np.random.permutation(bs)
+        # idx = np.random.permutation(bs)
+        idx = np.array(list(range(bs-1, -1, -1)))
         lam = np.random.beta(self._alpha, self._alpha)
         imgs = lam * imgs + (1 - lam) * imgs[idx]
         targets = self._mix_target(labels, labels[idx], lam)
@@ -90,9 +105,12 @@ class MixupOperator(BatchOperator):
 
 
 class CutmixOperator(BatchOperator):
-    """ Cutmix operator """
+    """ Cutmix operator
+    reference: https://arxiv.org/abs/1905.04899
 
-    def __init__(self, class_num, alpha=0.2):
+    """
+
+    def __init__(self, class_num, alpha=0.2, epsilon=None):
         """Build Cutmix operator
 
         Args:
@@ -101,6 +119,7 @@ class CutmixOperator(BatchOperator):
         Raises:
             Exception: The value of parameter is illegal.
         """
+        super(CutmixOperator, self).__init__(epsilon=epsilon)
         if alpha <= 0:
             raise Exception(
                 f"Parameter \"alpha\" of Cutmix should be greater than 0. \"alpha\": {alpha}."
@@ -134,7 +153,8 @@ class CutmixOperator(BatchOperator):
 
     def __call__(self, batch):
         imgs, labels, bs = self._unpack(batch)
-        idx = np.random.permutation(bs)
+        # idx = np.random.permutation(bs)
+        idx = np.array(list(range(bs-1, -1, -1)))
         lam = np.random.beta(self._alpha, self._alpha)
 
         bbx1, bby1, bbx2, bby2 = self._rand_bbox(imgs.shape, lam)
@@ -146,7 +166,10 @@ class CutmixOperator(BatchOperator):
 
 
 class FmixOperator(BatchOperator):
-    """ Fmix operator """
+    """ Fmix operator 
+    reference: https://arxiv.org/abs/2002.12047
+    
+    """
 
     def __init__(self,
                  class_num,

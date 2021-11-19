@@ -51,11 +51,10 @@ class CELoss(nn.Layer):
             loss = paddle.sum(x * label, axis=-1)
         else:
             if label.shape[-1] == x.shape[-1]:
-                label = F.softmax(label, axis=-1)
-                soft_label = True
+                loss = paddle.sum(-label * F.log_softmax(x, axis=-1), axis=-1)
             else:
                 soft_label = False
-            loss = F.cross_entropy(x, label=label, soft_label=soft_label)
+                loss = F.cross_entropy(x, label=label, soft_label=soft_label)
         loss = loss.mean()
         return {"CELoss": loss}
 

@@ -205,6 +205,7 @@ class Engine(object):
 
         # build optimizer
         if self.mode == 'train':
+            self.lr_sch_unit = self.config["Optimizer"]["lr"]["unit"]
             self.optimizer, self.lr_sch = build_optimizer(
                 self.config["Optimizer"], self.config["Global"]["epochs"],
                 len(self.train_dataloader), [self.model])
@@ -254,6 +255,8 @@ class Engine(object):
         if self.amp:
             self.scaler = paddle.amp.GradScaler(
                 init_loss_scaling=self.scale_loss,
+                incr_every_n_steps=2000,
+                decr_every_n_nan_or_inf=1,
                 use_dynamic_loss_scaling=self.use_dynamic_loss_scaling)
 
         self.max_iter = len(self.train_dataloader) - 1 if platform.system(

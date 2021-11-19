@@ -19,6 +19,7 @@ from paddle.optimizer import lr
 from paddle.optimizer.lr import LRScheduler
 
 from ppcls.utils import logger
+import math
 
 
 class Linear(object):
@@ -125,6 +126,44 @@ class Cosine(object):
                 end_lr=self.learning_rate,
                 last_epoch=self.last_epoch)
         return learning_rate
+
+class TimmCosine(lr.LRScheduler):    
+    def __init__(self,
+                 learning_rate,
+                 step_each_epoch,
+                 epochs,
+                 eta_min=0.0,
+                 warmup_epoch=0,
+                 warmup_start_lr=0.0,
+                 unit='step',
+                 verbose=False,
+                 last_epoch=-1,
+                 **kwargs):
+        if warmup_epoch >= epochs:
+            msg = f"When using warm up, the value of \"Global.epochs\" must be greater than value of \"Optimizer.lr.warmup_epoch\". The value of \"Optimizer.lr.warmup_epoch\" has been set to {epochs}."
+            logger.warning(msg)
+            warmup_epoch = epochs
+        self.learning_rate = learning_rate
+        if unit == 'step':
+            self.T_max = epochs * step_each_epoch
+            self.warmup_steps = int(round(warmup_epoch * step_each_epoch))
+        else:
+            self.T_max = epochs
+            self.warmup_steps = warmup_epoch
+            print(self.warmup_steps)
+        
+        self.eta_min = eta_min
+        self.last_epoch = last_epoch
+        self.warmup_start_lr = warmup_start_lr
+        
+        super(TimmCosine, self).__init__(learning_rate, last_epoch, verbose)   
+
+    def get_lr(self):
+        if self.last_epoch < self.warmup_steps:
+            return float(self.last_epoch) * (self.learning_rate - self.warmup_start_lr) / float(self.warmup_steps) + self.warmup_start_lr
+        
+        cur_steps = self.last_epoch - (self.T_max * (self.last_epoch // self.T_max))
+        return self.eta_min + 0.5 * (self.base_lr - self.eta_min) * (1 + math.cos(math.pi * cur_steps / self.T_max))
 
 
 class Step(object):
