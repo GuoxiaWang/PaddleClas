@@ -20,7 +20,7 @@ from .distanceloss import DistanceLoss
 from .distillationloss import DistillationCELoss
 from .distillationloss import DistillationGTCELoss
 from .distillationloss import DistillationDMLLoss
-from .multilabelloss import MultiLabelLoss
+from .multilabelloss import MultiLabelLoss, ViTCELoss
 
 
 class CombinedLoss(nn.Layer):

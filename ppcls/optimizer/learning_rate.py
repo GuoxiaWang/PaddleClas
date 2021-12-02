@@ -150,7 +150,6 @@ class TimmCosine(lr.LRScheduler):
         else:
             self.T_max = epochs
             self.warmup_steps = warmup_epoch
-            print(self.warmup_steps)
         
         self.eta_min = eta_min
         self.last_epoch = last_epoch
@@ -165,6 +164,43 @@ class TimmCosine(lr.LRScheduler):
         cur_steps = self.last_epoch - (self.T_max * (self.last_epoch // self.T_max))
         return self.eta_min + 0.5 * (self.base_lr - self.eta_min) * (1 + math.cos(math.pi * cur_steps / self.T_max))
 
+class ViTLRScheduler(lr.LRScheduler):    
+    def __init__(self,
+                 learning_rate,
+                 step_each_epoch,
+                 epochs,
+                 decay_type='cosine',
+                 linear_end=1e-5,
+                 warmup_steps=0,
+                 verbose=False,
+                 last_epoch=-1,
+                 **kwargs):
+
+        self.base_lr = learning_rate
+        self.linear_end = linear_end
+        self.T_max = epochs * step_each_epoch
+        self.warmup_steps = warmup_steps
+        
+        if self.warmup_steps >= self.T_max:
+            self.warmup_steps = self.T_max
+        
+        self.decay_type = decay_type
+        self.last_epoch = last_epoch
+        super(ViTLRScheduler, self).__init__(learning_rate, last_epoch, verbose)   
+
+    def get_lr(self):
+        
+        progress = (self.last_epoch - self.warmup_steps) / float(self.T_max - self.warmup_steps)
+        progress = min(1.0, max(0.0, progress))
+        
+        if self.decay_type == 'linear':
+            lr = self.linear_end + (self.base_lr - self.linear_end) * (1.0 - progress)
+        elif self.decay_type == 'cosine':
+            lr = 0.5 * self.base_lr * (1.0 + math.cos(math.pi * progress))
+        if self.warmup_steps:
+            lr = lr * min(1.0, self.last_epoch / self.warmup_steps)
+            
+        return lr
 
 class Step(object):
     """

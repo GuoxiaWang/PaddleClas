@@ -41,3 +41,31 @@ class MultiLabelLoss(nn.Layer):
         loss = self._binary_crossentropy(x, target, class_num)
         loss = loss.mean()
         return {"MultiLabelLoss": loss}
+    
+class ViTCELoss(nn.Layer):
+    """
+    ViT Sigmoid Cross entropy loss
+    """
+
+    def __init__(self, epsilon=None):
+        super().__init__()
+        if epsilon is not None and (epsilon <= 0 or epsilon >= 1):
+            epsilon = None
+        self.epsilon = epsilon
+
+    def forward(self, x, label):
+        if isinstance(x, dict):
+            x = x["logits"]
+        class_num = x.shape[-1]
+        if len(label.shape) == 1 or label.shape[-1] != class_num:
+            label = F.one_hot(label, class_num)
+            label = paddle.reshape(label, shape=[-1, class_num])
+        if self.epsilon is not None:
+            # vit style label smoothing
+            with paddle.no_grad(): 
+                label = label * (1.0 - self.epsilon) + self.epsilon
+                
+        loss = F.binary_cross_entropy_with_logits(x, label, reduction='none')
+        loss = paddle.sum(loss, axis=-1)
+        loss = loss.mean()
+        return {"ViTCELoss": loss}

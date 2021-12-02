@@ -205,7 +205,7 @@ class Engine(object):
 
         # build optimizer
         if self.mode == 'train':
-            self.lr_sch_unit = self.config["Optimizer"]["lr"]["unit"]
+            self.lr_sch_unit = self.config["Optimizer"]["lr"].get("unit", "step")
             self.optimizer, self.lr_sch = build_optimizer(
                 self.config["Optimizer"], self.config["Global"]["epochs"],
                 len(self.train_dataloader), [self.model])
