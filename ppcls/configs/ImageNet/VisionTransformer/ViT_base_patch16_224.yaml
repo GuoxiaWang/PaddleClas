@@ -89,9 +89,11 @@ DataLoader:
             to_rgb: True
             channel_first: False
         - ResizeImage:
-            resize_short: 224
+            resize_short: 256
             interpolation: bicubic
             backend: pil
+        - CropImage:
+            size: 224
         - NormalizeImage:
             scale: 1.0/255.0
             mean: [0.5, 0.5, 0.5]
@@ -99,7 +101,7 @@ DataLoader:
             order: ''
     sampler:
       name: DistributedBatchSampler
-      batch_size: 64
+      batch_size: 256
       drop_last: False
       shuffle: False
     loader:
@@ -114,7 +116,11 @@ Infer:
         to_rgb: True
         channel_first: False
     - ResizeImage:
-        resize_short: 224
+        resize_short: 256
+        interpolation: bicubic
+        backend: pil
+    - CropImage:
+        size: 224
     - NormalizeImage:
         scale: 1.0/255.0
         mean: [0.5, 0.5, 0.5]
